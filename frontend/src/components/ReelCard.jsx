@@ -1,29 +1,78 @@
-// src/components/ReelCard.jsx
 import React, { useRef, useState, useEffect } from "react";
-import { Heart, MessageCircle, Volume2, VolumeX, Edit, Trash } from "lucide-react";
+import { Heart, MessageCircle, Edit, Trash, Share2 } from "lucide-react";
 
 export default function ReelCard({ reel }) {
   const videoRef = useRef();
-  const [muted, setMuted] = useState(true);
   const [liked, setLiked] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentInput, setCommentInput] = useState("");
   const [comments, setComments] = useState([]);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editText, setEditText] = useState("");
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [showTapLike, setShowTapLike] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const video = videoRef.current;
+        if (video) {
+          if (entry.isIntersecting) {
+            video.muted = false;
+            video.play().catch((e) => console.warn("Autoplay failed", e));
+            setIsPlaying(true);
+          } else {
+            video.pause();
+            setIsPlaying(false);
+          }
+        }
+      },
+      { threshold: 0.75 }
+    );
+
+    const current = videoRef.current;
+    if (current) observer.observe(current);
+    return () => current && observer.unobserve(current);
+  }, []);
+
+  const handleTogglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.play();
+      setIsPlaying(true);
+    } else {
+      video.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const onDoubleClick = () => {
+    setLiked(true);
+    setShowTapLike(true);
+    setTimeout(() => setShowTapLike(false), 800); // Heart disappears after 0.8s
+  };
+
+  const handleHashtags = (text) => {
+    return text.split(/(#[a-zA-Z0-9_]+)/g).map((part, i) =>
+      part.startsWith("#") ? (
+        <span key={i} className="text-blue-500">{part}</span>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
+  };
 
   const handleCommentSubmit = (e) => {
     e.preventDefault();
-    if (commentInput.trim() === "") return;
+    if (!commentInput.trim()) return;
     setComments([{ user: "you", text: commentInput }, ...comments]);
     setCommentInput("");
     setShowComments(false);
   };
 
   const handleDelete = (index) => {
-    const newComments = [...comments];
-    newComments.splice(index, 1);
-    setComments(newComments);
+    setComments((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleEdit = (index) => {
@@ -39,87 +88,77 @@ export default function ReelCard({ reel }) {
     setEditText("");
   };
 
-  const handleHashtags = (text) => {
-    return text.split(/(#[a-zA-Z0-9_]+)/g).map((part, i) =>
-      part.startsWith("#") ? (
-        <span key={i} className="text-blue-500">{part}</span>
-      ) : (
-        <span key={i}>{part}</span>
-      )
-    );
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.origin + reel.video);
+    alert("Video link copied to clipboard!");
   };
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          videoRef.current.play();
-        } else {
-          videoRef.current.pause();
-        }
-      },
-      { threshold: 0.8 }
-    );
-    const current = videoRef.current;
-    if (current) observer.observe(current);
-    return () => observer.unobserve(current);
-  }, []);
-
   return (
-    <div className="relative w-full h-screen overflow-hidden">
+    <div className="relative w-full h-[92vh] flex items-center justify-center rounded-lg shadow overflow-hidden">
       <video
         ref={videoRef}
         src={reel.video}
         loop
-        muted={muted}
         autoPlay
+        muted
         playsInline
-        className="w-full h-full object-contain"
+        className="w-full h-full object-cover"
+        onClick={handleTogglePlay}
+        onDoubleClick={onDoubleClick}
       />
 
-      <div className="absolute bottom-24 left-4 text-black z-10">
-        <h2 className="font-bold text-lg">@{reel.author}</h2>
-        <p className="text-sm max-w-xs line-clamp-3">{handleHashtags(reel.caption)}</p>
+      {/* Double-tap like heart animation */}
+      {showTapLike && (
+        <Heart
+          size={80}
+          className="absolute text-white animate-ping pointer-events-none left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2"
+          fill="white"
+          stroke="white"
+        />
+      )}
+
+      {/* Overlay */}
+      <div className="absolute inset-0 flex flex-col justify-between px-4 py-6 z-10 pointer-events-none">
+        <div />
+
+        <div className="flex justify-between items-end pointer-events-auto">
+          {/* Left Content */}
+          <div className="space-y-2 max-w-[75%] text-white">
+            <h2 className="font-bold text-lg">@{reel.author}</h2>
+            <p className="text-sm">{handleHashtags(reel.caption)}</p>
+          </div>
+
+          {/* Right Icons */}
+          <div className="flex flex-col items-center gap-4 text-white mr-2">
+            <button onClick={() => setLiked(!liked)}>
+              <Heart
+                fill={liked ? "red" : "none"}
+                stroke={liked ? "red" : "white"}
+                className="transition-colors duration-300"
+              />
+            </button>
+            <button onClick={() => setShowComments(!showComments)}>
+              <MessageCircle />
+            </button>
+            <button onClick={handleShare}>
+              <Share2 />
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="absolute bottom-24 right-4 flex flex-col items-center gap-5 z-10">
-        <button
-          onClick={() => setLiked(!liked)}
-          className="text-2xl transition-transform duration-150"
-        >
-          <Heart fill={liked ? "red" : "none"} stroke={liked ? "red" : "black"} />
-        </button>
-        <button onClick={() => setShowComments(!showComments)} className="text-2xl">
-          <MessageCircle />
-        </button>
-        <button
-          onClick={() => {
-            setMuted((prev) => {
-              const newMuted = !prev;
-              videoRef.current.muted = newMuted;
-              return newMuted;
-            });
-          }}
-          className="text-2xl"
-        >
-          {muted ? <VolumeX /> : <Volume2 />}
-        </button>
-      </div>
-
+      {/* Comments */}
       {showComments && (
-        <div className="absolute bottom-0 left-0 w-full bg-white bg-opacity-90 p-4 backdrop-blur z-20 max-h-72 overflow-y-auto">
+        <div className="absolute bottom-0 left-0 w-full bg-white bg-opacity-95 p-4 backdrop-blur z-20 max-h-72 overflow-y-auto text-black">
           <form onSubmit={handleCommentSubmit} className="flex gap-2 mb-2">
             <input
               type="text"
               className="flex-1 border rounded p-1"
-              placeholder="Add a comment... 😊"
+              placeholder="Add a comment..."
               value={commentInput}
               onChange={(e) => setCommentInput(e.target.value)}
             />
-            <button
-              type="submit"
-              className="px-3 bg-blue-500 text-white rounded"
-            >
+            <button type="submit" className="px-3 bg-blue-500 text-white rounded">
               Post
             </button>
           </form>
@@ -127,7 +166,7 @@ export default function ReelCard({ reel }) {
             {comments.map((c, i) => (
               <div key={i} className="text-sm flex flex-col gap-1">
                 <div className="flex justify-between items-center gap-2">
-                  <span className="font-semibold">@{c.user}: </span>
+                  <span className="font-semibold">@{c.user}:</span>
                   {editingIndex === i ? (
                     <div className="flex gap-1">
                       <input
